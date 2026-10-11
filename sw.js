@@ -2,12 +2,11 @@
    📱 Service Worker - دفتر انضباطی
    ═══════════════════════════════════════════════════ */
 
-var CACHE_NAME = 'discipline-book-v12';
+var CACHE_NAME = 'discipline-book-v13';
 var CACHE_FILES = [
     './',
     './index.html',
     './firebase-init.js',
-    './auth-ui.js',
     './teacher.html',
     './manifest.json',
     './manifest-teacher.json',
