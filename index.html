@@ -1898,8 +1898,7 @@
 <!-- === MODALS-END: این خط را پاک نکن === -->
 
 <script>
-(function() {
-    'use strict';
+window.__initApp = function() {
     var localStorage = FB.store();
 
     /* ═══════════════════════════════════════════════════
@@ -5295,7 +5294,20 @@
         refreshHome();
     } catch(e) {}
 
-})();
+};
+
+// اجرا بعد از لاگین کاربر
+FB.onUserChange(function(user) {
+    if (user && FB.userData) {
+        if (!window.__appStarted) {
+            window.__appStarted = true;
+            setTimeout(function() {
+                try { window.__initApp(); }
+                catch(e) { console.error('❌ خطا در راه‌اندازی اپ:', e); }
+            }, 100);
+        }
+    }
+});
 </script>
 
 </body>
