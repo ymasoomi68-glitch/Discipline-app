@@ -1,0 +1,23 @@
+{
+  "app": "discipline-book",
+  "version": "1.2.5",
+  "notes": [
+    "تغییر نام مخزن به‌روزرسانی به Discipline-app"
+  ],
+  "files": [
+    "index.html",
+    "teacher.html",
+    "sw.js",
+    "manifest.json",
+    "manifest-teacher.json",
+    "icon-192.png",
+    "icon-512.png",
+    "icon-maskable-512.png",
+    "icon-t-192.png",
+    "icon-t-512.png",
+    "icon-t-maskable-512.png",
+    "apple-touch-icon.png",
+    "apple-touch-icon-t.png",
+    "favicon.png"
+  ]
+}

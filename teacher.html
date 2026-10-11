@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>📋 حضور و غیاب معلم</title>
+<meta name="cm-app" content="discipline-teacher">
+<meta name="theme-color" content="#059669">
+<link rel="manifest" href="manifest-teacher.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="حضور و غیاب">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon-t.png">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script>
+/* فضای ذخیره‌سازی جدا از دو برنامهٔ دیگر روی همین دامنه */
+(function(){
+    var PFX = 'tch1_';
+    try {
+        var real = window.localStorage;
+        var w = {
+            getItem: function(k){ return real.getItem(PFX + k); },
+            setItem: function(k, v){ real.setItem(PFX + k, v); },
+            removeItem: function(k){ real.removeItem(PFX + k); }
+        };
+        Object.defineProperty(window, 'store', { value: w });
+    } catch(e) {
+        var mem = {};
+        window.store = { getItem: function(k){ return k in mem ? mem[k] : null; }, setItem: function(k, v){ mem[k] = String(v); }, removeItem: function(k){ delete mem[k]; } };
+    }
+})();
+</script>
+<style>
+    :root { --g1:#059669; --g2:#10b981; --bg:#f1f5f4; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; }
+    body { font-family: 'Vazirmatn', Tahoma, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 96px; }
+    button { font-family: inherit; cursor: pointer; }
+    .top { background: linear-gradient(135deg, #065f46, #10b981); color: #fff; padding: 14px 16px calc(14px); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+    .top h1 { margin: 0; font-size: 18px; font-weight: 800; }
+    .top .sub { font-size: 12px; opacity: .9; }
+    .icon-btn { background: #ecfdf5; border: 0; color: #065f46; font-size: 20px; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 14px 12px; }
+    .card { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.06); margin-bottom: 12px; }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .chip { flex: 0 0 auto; border: 2px solid var(--border); background: #fff; border-radius: 20px; padding: 8px 16px; font-weight: 700; font-size: 14px; color: var(--muted); text-align: center; min-width: 96px; white-space: nowrap; }
+    .chip.on { background: var(--g1); border-color: var(--g1); color: #fff; }
+    .datebar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .datebar .d { flex: 1; text-align: center; font-weight: 800; font-size: 15px; line-height: 1.5; padding: 8px 10px; border-radius: 16px; border: 2px solid #6ee7b7; background: linear-gradient(135deg, #ecfdf5, #d1fae5); color: #065f46; box-shadow: 0 3px 10px rgba(16,185,129,.18), inset 0 1px 0 #fff; }
+    .datebar .d small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+    .sm { border: 1px solid var(--border); background: #fff; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+    .st { background: #fff; border-radius: 14px; padding: 10px 4px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+    .st b { display: block; font-size: 20px; } .st span { font-size: 11px; color: var(--muted); }
+    .row { background: #fff; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+    .row .nm { font-weight: 700; font-size: 15px; margin-bottom: 8px; display: flex; gap: 8px; align-items: baseline; }
+    .row .nm i { font-style: normal; color: var(--muted); font-size: 12px; font-weight: 400; }
+    .row .bt { display: flex; gap: 6px; }
+    .ab { flex: 1; height: 44px; border-radius: 12px; border: 2px solid; background: #fff; font-weight: 800; font-size: 14px; }
+    .ab[data-s="present"] { border-color: #6ee7b7; color: #059669; } .ab[data-s="absent"] { border-color: #fca5a5; color: #dc2626; } .ab[data-s="late"] { border-color: #fcd34d; color: #d97706; }
+    .ab.on[data-s="present"] { background: #10b981; border-color: #10b981; color: #fff; }
+    .ab.on[data-s="absent"] { background: #ef4444; border-color: #ef4444; color: #fff; }
+    .ab.on[data-s="late"] { background: #f59e0b; border-color: #f59e0b; color: #fff; }
+    .bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 16px rgba(0,0,0,.12); z-index: 25; display: flex; gap: 8px; justify-content: center; }
+    .bar .send { flex: 1; max-width: 560px; height: 52px; border: 0; border-radius: 14px; background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-size: 16px; font-weight: 800; }
+    .bar .all { height: 52px; border-radius: 14px; border: 2px solid var(--g2); background: #ecfdf5; color: #047857; font-weight: 800; padding: 0 14px; font-size: 14px; }
+    .btn { border: 0; border-radius: 12px; padding: 12px 16px; font-weight: 700; font-size: 14px; background: var(--g1); color: #fff; }
+    .btn.o { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    .btn.d { background: #ef4444; }
+    .btn.block { width: 100%; margin-top: 8px; }
+    .empty { text-align: center; padding: 26px 10px; color: var(--muted); line-height: 2; }
+    .empty .big { font-size: 46px; }
+    .ov { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+    .ov.open { display: flex; }
+    .sheet { background: #fff; width: 100%; max-width: 560px; border-radius: 20px 20px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 88vh; overflow: auto; }
+    .sheet h2 { margin: 0 0 10px; font-size: 17px; }
+    .sheet p { color: var(--muted); font-size: 13px; line-height: 1.9; margin: 0 0 10px; }
+    input[type=text], input[type=file], textarea { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 11px 12px; font: inherit; font-size: 14px; margin-bottom: 8px; background: #fff; }
+    textarea { min-height: 150px; direction: rtl; }
+    .pick { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; font-size: 14px; }
+    .pick b { flex: 1; } .pick small { color: var(--muted); }
+    .li { display: flex; align-items: center; gap: 8px; padding: 9px 4px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .li span { flex: 1; } .li .x { border: 0; background: #fee2e2; color: #dc2626; border-radius: 8px; font-weight: 800; padding: 6px 10px; }
+    .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 24px; font-size: 14px; z-index: 80; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90%; text-align: center; }
+    .toast.on { opacity: 1; }
+    .msgbox { white-space: pre-wrap; background: #f8fafc; border: 1px dashed var(--border); border-radius: 12px; padding: 10px; font-size: 13px; line-height: 1.9; max-height: 240px; overflow: auto; word-break: break-all; }
+    .sent-ok { color: #059669; font-size: 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+<header class="top">
+    <div><h1>📋 سامانه حضور و غیاب</h1><div class="sub" id="whoLbl">برنامهٔ معلم</div></div>
+    <button class="icon-btn" id="btnSettings" aria-label="تنظیمات"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+</header>
+
+<main class="wrap" id="main"></main>
+
+<div class="bar" id="bar" style="display:none;">
+    <button class="all" id="btnAllPresent">✅ همه حاضر</button>
+    <button class="send" id="btnSend">📤 ارسال به معاون</button>
+</div>
+
+<!-- تنظیمات -->
+<div class="ov" id="ovSettings"><div class="sheet">
+    <h2>⚙️ تنظیمات</h2>
+    <label style="font-size:13px;font-weight:700;">نام شما (در پیام ارسالی نوشته می‌شود)</label>
+    <input type="text" id="inTeacher" placeholder="مثلاً: خانم احمدی">
+    <button class="btn block" id="btnSaveName">💾 ذخیره نام</button>
+    <button class="btn block" id="btnInstall2" style="background:#4f46e5;">📱 نصب روی این دستگاه</button>
+    <button class="btn o block" id="btnImport">📥 ورود کلاس از فایل ارسالی معاون</button>
+    <button class="btn o block" id="btnManage">👥 مدیریت کلاس‌ها و دانش‌آموزان</button>
+    <button class="btn o block" id="btnHistory">🕘 ارسال‌های قبلی</button>
+    <button class="btn o block" data-close="ovSettings">بستن</button>
+    <p style="text-align:center;margin-top:12px;">نسخهٔ ۱.۲.۵</p>
+</div></div>
+
+<!-- ورود JSON -->
+<div class="ov" id="ovImport"><div class="sheet">
+    <h2>📥 ورود کلاس از سیدا</h2>
+    <p>فایل JSON را که معاون برایتان فرستاده انتخاب کنید و فقط کلاس خودتان را علامت بزنید.</p>
+    <input type="file" id="fileJson">
+    <p style="margin:8px 0 4px;">یا اگر معاون متن کلاس‌ها را فرستاده، آن را اینجا بچسبانید:</p>
+    <textarea id="impText" style="width:100%;min-height:70px;border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;direction:ltr;margin-bottom:8px;" placeholder='{"classes":[...]}'></textarea>
+    <div id="impStatus" style="font-size:13px;margin-bottom:8px;"></div>
+    <div id="impList"></div>
+    <button class="btn block" id="btnDoImport" disabled>📥 ورود کلاس‌های انتخاب‌شده</button>
+    <button class="btn o block" data-close="ovImport">انصراف</button>
+</div></div>
+
+<!-- مدیریت -->
+<div class="ov" id="ovManage"><div class="sheet">
+    <h2>👥 کلاس‌ها و دانش‌آموزان</h2>
+    <div id="manageBody"></div>
+    <button class="btn o block" data-close="ovManage">بستن</button>
+</div></div>
+
+<!-- نوع غیبت -->
+<div class="ov" id="ovAbs"><div class="sheet">
+    <h2 id="absName">نوع غیبت</h2>
+    <button class="btn block" id="absJ" style="background:#2563eb;">📄 غایب موجه</button>
+    <button class="btn d block" id="absU">❌ غایب غیرموجه</button>
+    <button class="btn o block" id="absClear">پاک کردن وضعیت</button>
+    <button class="btn o block" data-close="ovAbs">انصراف</button>
+</div></div>
+
+<!-- پیام ارسال -->
+<div class="ov" id="ovSend"><div class="sheet">
+    <h2>📤 پیام آمادهٔ ارسال</h2>
+    <p>پیام کوتاه است؛ اگر منوی اشتراک‌گذاری باز نشد، کپی کنید و در شاد/ایتا/بله برای معاون بفرستید. خط دوم (DB2…) را پاک نکنید.</p>
+    <div class="msgbox" id="sendMsg"></div>
+    <button class="btn block" id="btnShare">📤 ارسال (انتخاب برنامه)</button>
+    <button class="btn o block" id="btnCopy">📋 کپی پیام</button>
+    <button class="btn o block" data-close="ovSend">بستن</button>
+</div></div>
+
+<!-- افزودن دانش‌آموز / کلاس -->
+<div class="ov" id="ovForm"><div class="sheet">
+    <h2 id="formTitle"></h2>
+    <div id="formFields"></div>
+    <button class="btn block" id="formOk">💾 ذخیره</button>
+    <button class="btn o block" data-close="ovForm">انصراف</button>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+    'use strict';
+    var S = window.store;
+    var MN = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+    function $(id) { return document.getElementById(id); }
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function fa(n) { return String(n).replace(/\d/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.charAt(d); }); }
+    function genId() { return 'id_' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
+    function norm(t) { return String(t == null ? '' : t).replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\s+/g, ' ').trim(); }
+    function digits(v) { return String(v == null ? '' : v).replace(/[۰-۹]/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }).replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); }
+    var toastT;
+    function toast(m) { var t = $('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function() { t.classList.remove('on'); }, 2200); }
+    function openOv(id) { $(id).classList.add('open'); }
+    function closeOv(id) { $(id).classList.remove('open'); }
+    document.querySelectorAll('[data-close]').forEach(function(b) { b.addEventListener('click', function() { closeOv(b.getAttribute('data-close')); }); });
+    document.querySelectorAll('.ov').forEach(function(o) { o.addEventListener('click', function(e) { if (e.target === o) o.classList.remove('open'); }); });
+
+    /* ===== تاریخ شمسی ===== */
+    function j2g(jy, jm, jd) {
+        jy = jy - 979; var n = 365 * jy + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4);
+        var dm = [31,31,31,31,31,31,30,30,30,30,30,29]; for (var i = 0; i < jm - 1; ++i) n += dm[i]; n += jd - 1;
+        var g = n + 79, gy = 1600 + 400 * Math.floor(g / 146097); g = g % 146097; var leap = true;
+        if (g >= 36525) { g--; gy += 100 * Math.floor(g / 36524); g = g % 36524; if (g >= 365) g++; else leap = false; }
+        gy += 4 * Math.floor(g / 1461); g %= 1461;
+        if (g >= 366) { leap = false; g--; gy += Math.floor(g / 365); g = g % 365; }
+        var gm = [31,28,31,30,31,30,31,31,30,31,30,31], gi = 0;
+        for (; g >= gm[gi] + ((gi === 1 && leap) ? 1 : 0); gi++) g -= gm[gi] + ((gi === 1 && leap) ? 1 : 0);
+        return [gy, gi + 1, g + 1];
+    }
+    function jstr2d(s) { var m = String(s).match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/); if (!m) return null; var g = j2g(+m[1], +m[2], +m[3]); return new Date(g[0], g[1] - 1, g[2], 12); }
+    function d2jstr(d) { return new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+    function todayStr() { return d2jstr(new Date()); }
+    function describe(s) {
+        var d = jstr2d(s), p = s.split('/'), wd = '';
+        try { wd = new Intl.DateTimeFormat('fa-IR', { weekday: 'long' }).format(d); } catch(e) {}
+        return (wd ? wd + ' ' : '') + fa(parseInt(p[2], 10)) + ' ' + MN[parseInt(p[1], 10) - 1] + ' ' + fa(p[0]);
+    }
+    function shift(s, n) { var d = jstr2d(s); d.setDate(d.getDate() + n); return d2jstr(d); }
+
+    /* ===== داده ===== */
+    var classes = [], att = {}, sent = [], cfg = { teacher: '', cur: '' }, curDate = todayStr();
+    function load() {
+        try { classes = JSON.parse(S.getItem('classes') || '[]') || []; } catch(e) { classes = []; }
+        try { att = JSON.parse(S.getItem('att') || '{}') || {}; } catch(e) { att = {}; }
+        try { sent = JSON.parse(S.getItem('sent') || '[]') || []; } catch(e) { sent = []; }
+        try { cfg = Object.assign(cfg, JSON.parse(S.getItem('cfg') || '{}')); } catch(e) {}
+    }
+    function saveC() { S.setItem('classes', JSON.stringify(classes)); }
+    function saveA() { S.setItem('att', JSON.stringify(att)); }
+    function saveS() { S.setItem('sent', JSON.stringify(sent.slice(-60))); }
+    function saveCfg() { S.setItem('cfg', JSON.stringify(cfg)); }
+    function curCls() { return classes.filter(function(c) { return c.id === cfg.cur; })[0] || classes[0] || null; }
+    function sortSt(c) { c.students.sort(function(a, b) { return ((a.family || '') + (a.name || '')).localeCompare((b.family || '') + (b.name || ''), 'fa'); }); }
+    function cname(n) { var t = String(n == null ? '' : n).trim().replace(/([^\d۰-۹\s])\s*([\d۰-۹])/, '$1 $2').replace(/\d/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.charAt(d); }); return /^کلاس/.test(t) ? t : 'کلاس ' + t; }
+    function dayMap(c, create) { var k = c.className + '|' + curDate; if (!att[k] && create) att[k] = {}; return att[k] || {}; }
+
+    /* ===== نمایش ===== */
+    function render() {
+        var c = curCls(), m = $('main'), ib = installBanner();
+        $('whoLbl').textContent = cfg.teacher ? cfg.teacher : 'برنامهٔ معلم';
+        if (!c) {
+            $('bar').style.display = 'none';
+            m.innerHTML = ib + '<div class="card"><div class="empty"><div class="big">📚</div><b>هنوز کلاسی ندارید</b><br>فایل JSON سیدا را که معاون داده وارد کنید.</div>' +
+                '<button class="btn block" id="e1">📥 ورود کلاس از فایل ارسالی معاون</button><button class="btn o block" id="e2">➕ ساخت کلاس دستی</button></div>';
+            $('e1').onclick = openImport; $('e2').onclick = function() { addClassForm(); };
+            return;
+        }
+        cfg.cur = c.id;
+        var dm = dayMap(c), h = ib;
+        h += '<div class="card"><div class="chips">' + classes.map(function(x) { return '<button class="chip' + (x.id === c.id ? ' on' : '') + '" data-c="' + x.id + '">' + esc(cname(x.className)) + '</button>'; }).join('') + '</div>';
+        h += '<div class="datebar"><button class="sm" id="dPrev">◀</button><div class="d">' + describe(curDate) + '<small>' + (curDate === todayStr() ? 'امروز' : '<a href="#" id="dToday" style="color:#059669;">برگشت به امروز</a>') + '</small></div><button class="sm" id="dNext">▶</button></div></div>';
+        var n = { present: 0, late: 0, absent: 0, none: 0 };
+        c.students.forEach(function(s) { var v = dm[s.id]; if (v === 'present') n.present++; else if (v === 'late') n.late++; else if (v === 'absent_j' || v === 'absent_u') n.absent++; else n.none++; });
+        h += '<div class="stats"><div class="st"><b style="color:#10b981">' + fa(n.present) + '</b><span>حاضر</span></div><div class="st"><b style="color:#ef4444">' + fa(n.absent) + '</b><span>غایب</span></div><div class="st"><b style="color:#f59e0b">' + fa(n.late) + '</b><span>تأخیر</span></div><div class="st"><b style="color:#94a3b8">' + fa(n.none) + '</b><span>ثبت‌نشده</span></div></div>';
+        var lastSent = sent.filter(function(x) { return x.c === c.className && x.d === curDate; }).pop();
+        if (lastSent) h += '<div class="sent-ok" style="margin:-4px 4px 8px;">✔ این روز قبلاً ارسال شده است (' + fa(new Date(lastSent.t).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })) + ')</div>';
+        if (!c.students.length) h += '<div class="card"><div class="empty">این کلاس دانش‌آموزی ندارد.<br>از تنظیمات ← مدیریت، دانش‌آموز اضافه کنید.</div></div>';
+        c.students.forEach(function(s, i) {
+            var v = dm[s.id] || '';
+            var absLbl = v === 'absent_j' ? 'غایب (موجه)' : v === 'absent_u' ? 'غایب (غیرموجه)' : 'غایب';
+            h += '<div class="row"><div class="nm">' + fa(i + 1) + '. ' + esc((s.family || '') + ' ' + (s.name || '')) + (s.father ? '<i>فرزند ' + esc(s.father) + '</i>' : '') + '</div><div class="bt" data-s="' + s.id + '">' +
+                '<button class="ab' + (v === 'present' ? ' on' : '') + '" data-s="present">حاضر</button>' +
+                '<button class="ab' + (v === 'absent_j' || v === 'absent_u' ? ' on' : '') + '" data-s="absent">' + absLbl + '</button>' +
+                '<button class="ab' + (v === 'late' ? ' on' : '') + '" data-s="late">تأخیر</button></div></div>';
+        });
+        m.innerHTML = h;
+        $('bar').style.display = c.students.length ? 'flex' : 'none';
+    }
+
+    $('main').addEventListener('click', function(e) {
+        var t = e.target, c = curCls();
+        if (t.classList.contains('chip')) { cfg.cur = t.getAttribute('data-c'); saveCfg(); render(); return; }
+        if (t.id === 'dPrev') { curDate = shift(curDate, -1); render(); return; }
+        if (t.id === 'dNext') { curDate = shift(curDate, 1); render(); return; }
+        if (t.id === 'dToday') { e.preventDefault(); curDate = todayStr(); render(); return; }
+        if (t.classList.contains('ab') && c) {
+            var sid = t.parentNode.getAttribute('data-s'), st = t.getAttribute('data-s'), dm = dayMap(c, true);
+            if (st === 'absent') { askAbsent(c, sid); return; }
+            if (dm[sid] === st) delete dm[sid]; else dm[sid] = st;
+            saveA(); render();
+        }
+    });
+    var absCtx = null;
+    function askAbsent(c, sid) {
+        var s = c.students.filter(function(x) { return x.id === sid; })[0];
+        absCtx = { c: c, sid: sid }; $('absName').textContent = 'نوع غیبت — ' + ((s.family || '') + ' ' + (s.name || '')); openOv('ovAbs');
+    }
+    function setAbs(v) { var dm = dayMap(absCtx.c, true); if (v) dm[absCtx.sid] = v; else delete dm[absCtx.sid]; saveA(); closeOv('ovAbs'); render(); }
+    $('absJ').onclick = function() { setAbs('absent_j'); };
+    $('absU').onclick = function() { setAbs('absent_u'); };
+    $('absClear').onclick = function() { setAbs(''); };
+
+    $('btnAllPresent').onclick = function() {
+        var c = curCls(); if (!c) return; var dm = dayMap(c, true), k = 0;
+        c.students.forEach(function(s) { if (!dm[s.id]) { dm[s.id] = 'present'; k++; } });
+        saveA(); render(); toast(k ? fa(k) + ' نفر حاضر ثبت شد' : 'همه قبلاً ثبت شده‌اند');
+    };
+
+    /* ===== پیام ارسال ===== */
+    // کلید کوتاه دانش‌آموز: آخرین L رقم کد ملی (L طوری است که در کلاس یکتا باشد)
+    function pickL(c) {
+        var codes = c.students.map(function(s) { return digits(s.codemelli || '').replace(/\D/g, ''); }).filter(Boolean);
+        for (var L = 4; L <= 10; L++) { var seen = {}, ok = true; codes.forEach(function(x) { var k = x.slice(-L); if (seen[k]) ok = false; seen[k] = 1; }); if (ok) return L; }
+        return 10;
+    }
+    function sfx(s, L) { var c = digits(s.codemelli || '').replace(/\D/g, ''); return c ? c.slice(-L) : 'n:' + norm((s.family || '') + ' ' + (s.name || '')).replace(/[,|]/g, ' '); }
+    function buildMessage(c, dm) {
+        var L = pickL(c), u = [], j = [], l = [];
+        c.students.forEach(function(s) { var v = dm[s.id] || 'present'; if (v === 'absent_u') u.push(sfx(s, L)); else if (v === 'absent_j') j.push(sfx(s, L)); else if (v === 'late') l.push(sfx(s, L)); });
+        var na = u.length + j.length, p = curDate.split('/');
+        var head = (na || l.length ? '📋 ' : '✅ ') + cname(c.className) + ' | ' + fa(parseInt(p[2], 10)) + ' ' + MN[parseInt(p[1], 10) - 1] + ' | ' + (na || l.length ? 'غایب ' + fa(na) + '، تأخیر ' + fa(l.length) : 'همه حاضر');
+        var code = 'DB2|' + L + '|' + c.className.replace(/[|\n]/g, ' ') + '|' + curDate + '|' + u.join(',') + '|' + j.join(',') + '|' + l.join(',') + '|' + (cfg.teacher || '').replace(/[|\n]/g, ' ');
+        return head + '\n' + code;
+    }
+    var pendingMsg = '', pendingMeta = null;
+    $('btnSend').onclick = function() {
+        var c = curCls(); if (!c) return; var dm = dayMap(c, true);
+        var none = c.students.filter(function(s) { return !dm[s.id]; }).length;
+        if (none) {
+            if (!confirm(fa(none) + ' نفر هنوز ثبت نشده‌اند.\nبه‌عنوان «حاضر» ارسال شوند؟')) return;
+            c.students.forEach(function(s) { if (!dm[s.id]) dm[s.id] = 'present'; }); saveA(); render();
+        }
+        pendingMsg = buildMessage(c, dm); pendingMeta = { c: c.className, d: curDate };
+        $('sendMsg').textContent = pendingMsg;
+        if (navigator.share) { doShare(); } else openOv('ovSend');
+    };
+    function markSent() { sent.push({ c: pendingMeta.c, d: pendingMeta.d, t: Date.now(), m: pendingMsg }); saveS(); render(); }
+    function doShare() {
+        navigator.share({ text: pendingMsg }).then(function() { markSent(); toast('✅ ارسال شد'); closeOv('ovSend'); })
+            .catch(function(err) { if (err && err.name === 'AbortError') { openOv('ovSend'); return; } openOv('ovSend'); });
+    }
+    $('btnShare').onclick = function() { if (navigator.share) doShare(); else toast('این مرورگر منوی اشتراک ندارد؛ کپی کنید'); };
+    function copyText(t, cb) {
+        function fb() { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand('copy'); } catch(e) {} ta.remove(); cb(ok); }
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function() { cb(true); }, fb); else fb();
+    }
+    $('btnCopy').onclick = function() { copyText(pendingMsg, function(ok) { if (ok) { markSent(); toast('📋 کپی شد؛ در شاد/ایتا بچسبانید'); } else toast('کپی نشد؛ متن را دستی انتخاب کنید'); }); };
+
+    /* ===== تنظیمات ===== */
+    $('btnSettings').onclick = function() { $('inTeacher').value = cfg.teacher || ''; openOv('ovSettings'); };
+    $('btnSaveName').onclick = function() { cfg.teacher = $('inTeacher').value.trim(); saveCfg(); render(); toast('ذخیره شد'); };
+    $('btnHistory').onclick = function() {
+        closeOv('ovSettings');
+        var h = sent.slice().reverse().slice(0, 30).map(function(x, i) {
+            return '<div class="li"><span>' + esc(x.c) + ' — ' + describe(x.d) + '</span><button class="x" style="background:#d1fae5;color:#047857;" data-i="' + (sent.length - 1 - i) + '">کپی</button></div>';
+        }).join('') || '<div class="empty">هنوز چیزی ارسال نشده</div>';
+        $('manageBody').innerHTML = '<p>پیام‌های ارسال‌شده؛ برای فرستادن دوباره «کپی» را بزنید.</p>' + h; openOv('ovManage');
+    };
+
+    /* ===== ورود JSON ===== */
+    var parsed = [];
+    function openImport() { closeOv('ovSettings'); parsed = []; $('fileJson').value = ''; $('impList').innerHTML = ''; $('impStatus').textContent = ''; $('btnDoImport').disabled = true; openOv('ovImport'); }
+    $('btnImport').onclick = openImport;
+    function normalizeSida(j) {
+        var arr = Array.isArray(j) ? j : (j && Array.isArray(j.classes) ? j.classes : null);
+        if (!arr) throw new Error('فایل، خروجی «سیدا به JSON» نیست.');
+        var out = [];
+        arr.forEach(function(c) {
+            var name = norm(c && (c.className || c.name)); if (!name) return;
+            var list = [];
+            (c.students || []).forEach(function(s) {
+                var nm = norm(s.name || s.firstName), fm = norm(s.family || s.lastName); if (!nm && !fm) return;
+                var code = digits(s.codemelli || s.nationalCode).replace(/\D/g, ''); if (code && code.length < 10) code = ('0000000000' + code).slice(-10);
+                list.push({ name: nm, family: fm, father: norm(s.father || s.fatherName), codemelli: code });
+            });
+            out.push({ className: name, gradeName: norm(c.gradeName), students: list });
+        });
+        if (!out.length) throw new Error('کلاسی در فایل نیست.'); return out;
+    }
+    function loadImportText(txt) {
+        try {
+            parsed = normalizeSida(JSON.parse(String(txt).replace(/^\uFEFF/, '').trim()));
+            $('impStatus').textContent = '✅ ' + fa(parsed.length) + ' کلاس پیدا شد؛ کلاس خودتان را علامت بزنید.';
+            $('impList').innerHTML = parsed.map(function(c, i) { return '<label class="pick"><input type="checkbox" data-i="' + i + '"><b>' + esc(cname(c.className)) + '</b><small>' + fa(c.students.length) + ' نفر</small></label>'; }).join('');
+            upd();
+        } catch(e) { parsed = []; $('impStatus').textContent = '❌ ' + (e instanceof SyntaxError ? 'فایل یا متن JSON معتبر نیست.' : e.message); $('impList').innerHTML = ''; upd(); }
+    }
+    $('fileJson').onchange = function() {
+        var f = this.files[0]; if (!f) return; var r = new FileReader();
+        r.onload = function(ev) { loadImportText(ev.target.result); };
+        r.readAsText(f, 'UTF-8');
+    };
+    $('impText').oninput = function() { if (this.value.trim()) loadImportText(this.value); };
+    function upd() { var n = $('impList').querySelectorAll('input:checked').length; $('btnDoImport').disabled = !n; $('btnDoImport').textContent = n ? '📥 ورود ' + fa(n) + ' کلاس' : '📥 ورود کلاس‌های انتخاب‌شده'; }
+    $('impList').onchange = upd;
+    $('btnDoImport').onclick = function() {
+        var add = 0, nw = 0;
+        $('impList').querySelectorAll('input:checked').forEach(function(ch) {
+            var p = parsed[+ch.getAttribute('data-i')];
+            var c = classes.filter(function(x) { return x.className === p.className; })[0];
+            if (!c) { c = { id: genId(), className: p.className, gradeName: p.gradeName, students: [] }; classes.push(c); nw++; }
+            p.students.forEach(function(s) {
+                var dup = c.students.some(function(x) { return s.codemelli && x.codemelli ? x.codemelli === s.codemelli : (x.name === s.name && x.family === s.family); });
+                if (!dup) { c.students.push({ id: genId(), name: s.name, family: s.family, father: s.father, codemelli: s.codemelli }); add++; }
+            });
+            sortSt(c); if (!cfg.cur) cfg.cur = c.id;
+        });
+        saveC(); saveCfg(); closeOv('ovImport'); render(); toast('✅ ' + fa(nw) + ' کلاس و ' + fa(add) + ' دانش‌آموز وارد شد');
+    };
+
+    /* ===== مدیریت دستی ===== */
+    var formCb = null;
+    function openForm(title, fields, cb) {
+        $('formTitle').textContent = title;
+        $('formFields').innerHTML = fields.map(function(f, i) { return '<input type="text" id="ff' + i + '" placeholder="' + f + '">'; }).join('');
+        formCb = cb; openOv('ovForm'); setTimeout(function() { var e = $('ff0'); if (e) e.focus(); }, 80);
+    }
+    $('formOk').onclick = function() { var v = []; for (var i = 0; $('ff' + i); i++) v.push($('ff' + i).value.trim()); if (formCb(v) !== false) closeOv('ovForm'); };
+    function addClassForm() { closeOv('ovSettings'); openForm('➕ کلاس جدید', ['نام کلاس (مثلاً پنجم الف)', 'پایه (اختیاری)'], function(v) {
+        if (!v[0]) { toast('نام کلاس لازم است'); return false; }
+        if (classes.some(function(c) { return c.className === v[0]; })) { toast('این کلاس هست'); return false; }
+        var c = { id: genId(), className: norm(v[0]), gradeName: norm(v[1]), students: [] }; classes.push(c); cfg.cur = c.id; saveC(); saveCfg(); render(); } ); }
+    function manage() {
+        var h = classes.map(function(c) { return '<div class="li"><span><b>' + esc(cname(c.className)) + '</b> <small style="color:#64748b">' + fa(c.students.length) + ' نفر</small></span>' +
+            '<button class="x" style="background:#dbeafe;color:#1d4ed8;" data-st="' + c.id + '">دانش‌آموزان</button><button class="x" data-dc="' + c.id + '">حذف</button></div>'; }).join('') || '<div class="empty">کلاسی نیست</div>';
+        $('manageBody').innerHTML = h + '<button class="btn block" id="mAdd">➕ کلاس جدید</button>'; openOv('ovManage');
+    }
+    $('btnManage').onclick = function() { closeOv('ovSettings'); manage(); };
+    function students(cid) {
+        var c = classes.filter(function(x) { return x.id === cid; })[0]; if (!c) return;
+        $('manageBody').innerHTML = '<p><b>' + esc(cname(c.className)) + '</b></p>' + (c.students.map(function(s, i) { return '<div class="li"><span>' + fa(i + 1) + '. ' + esc((s.family || '') + ' ' + (s.name || '')) + '</span><button class="x" data-ds="' + c.id + '|' + s.id + '">✕</button></div>'; }).join('') || '<div class="empty">دانش‌آموزی نیست</div>') +
+            '<button class="btn block" data-as="' + c.id + '">➕ دانش‌آموز جدید</button><button class="btn o block" id="mBack">◀ بازگشت</button>';
+    }
+    $('manageBody').addEventListener('click', function(e) {
+        var t = e.target, v;
+        if (t.id === 'mAdd') { closeOv('ovManage'); addClassForm(); }
+        else if (t.id === 'mBack') manage();
+        else if ((v = t.getAttribute('data-st'))) students(v);
+        else if ((v = t.getAttribute('data-dc'))) { if (confirm('کلاس و همهٔ حضور و غیاب‌هایش حذف شود؟')) { var cn = classes.filter(function(c) { return c.id === v; })[0].className; classes = classes.filter(function(c) { return c.id !== v; }); Object.keys(att).forEach(function(k) { if (k.indexOf(cn + '|') === 0) delete att[k]; }); if (cfg.cur === v) cfg.cur = ''; saveC(); saveA(); saveCfg(); render(); manage(); } }
+        else if ((v = t.getAttribute('data-ds'))) { var p = v.split('|'); if (confirm('این دانش‌آموز حذف شود؟')) { var c = classes.filter(function(x) { return x.id === p[0]; })[0]; c.students = c.students.filter(function(s) { return s.id !== p[1]; }); saveC(); render(); students(p[0]); } }
+        else if ((v = t.getAttribute('data-as'))) { closeOv('ovManage'); openForm('➕ دانش‌آموز جدید', ['نام', 'نام خانوادگی', 'نام پدر (اختیاری)', 'کد ملی (اختیاری)'], function(f) {
+            if (!f[0] && !f[1]) { toast('نام لازم است'); return false; }
+            var c = classes.filter(function(x) { return x.id === v; })[0]; c.students.push({ id: genId(), name: norm(f[0]), family: norm(f[1]), father: norm(f[2]), codemelli: digits(f[3]).replace(/\D/g, '') }); sortSt(c); saveC(); render(); setTimeout(function() { students(v); openOv('ovManage'); }, 50); }); }
+        else if ((v = t.getAttribute('data-i'))) { var x = sent[+v]; if (x) copyText(x.m, function(ok) { toast(ok ? '📋 کپی شد' : 'کپی نشد'); }); }
+    });
+
+    /* ===== نصب روی دستگاه ===== */
+    var deferred = null, standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var bannerOff = false;
+    try { bannerOff = S.getItem('nobanner') === '1'; } catch(e) {}
+    window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); deferred = e; render(); });
+    window.addEventListener('appinstalled', function() { deferred = null; standalone = true; render(); toast('✅ نصب شد'); });
+    function doInstall() {
+        if (standalone) { toast('برنامه همین حالا نصب است'); return; }
+        if (deferred) { deferred.prompt(); deferred.userChoice.then(function() { deferred = null; render(); }); return; }
+        if (isIOS) alert('در آیفون: دکمهٔ اشتراک‌گذاری (مربع با فلش) را در Safari بزنید و «Add to Home Screen» را انتخاب کنید.');
+        else alert('از منوی مرورگر (⋮) گزینهٔ «Install app» یا «Add to Home screen» را بزنید.');
+    }
+    $('btnInstall2').onclick = function() { closeOv('ovSettings'); doInstall(); };
+    function installBanner() {
+        if (standalone || bannerOff || (!deferred && !isIOS)) return '';
+        return '<div class="card" style="background:#eef2ff;display:flex;align-items:center;gap:10px;"><span style="flex:1;font-size:13px;line-height:1.8;">📱 برای دسترسی سریع، برنامه را روی گوشی نصب کنید.</span><button class="btn" id="btnInstall" style="background:#4f46e5;padding:10px 14px;">نصب</button><button class="sm" id="btnNoBanner" aria-label="بستن">✕</button></div>';
+    }
+    $('main').addEventListener('click', function(e) {
+        if (e.target.id === 'btnInstall') doInstall();
+        else if (e.target.id === 'btnNoBanner') { bannerOff = true; try { S.setItem('nobanner', '1'); } catch(x) {} render(); }
+    });
+
+    load(); render();
+    if ('serviceWorker' in navigator) window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').catch(function() {}); });
+})();
+</script>
+</body>
+</html>
