@@ -1723,7 +1723,7 @@
             </div>
 
             <div style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:20px;padding:16px;border-top:1px dashed var(--border);">
-                📒 دفتر انضباطی - نسخهٔ <span id="appVersionLabel">۱.۲.۵</span><br>
+                📒 دفتر انضباطی - نسخهٔ <span id="appVersionLabel">۱.۳.۱</span><br>
                 🎨 طراح: یوسف معصومی
             </div>
         </div>
@@ -4998,7 +4998,7 @@ window.__initApp = function() {
     /* ═══════════════════════════════════════════════════
        🔄 به‌روزرسانی از GitHub
        ═══════════════════════════════════════════════════ */
-    var APP_VERSION = '1.3.0';
+    var APP_VERSION = '1.3.1';
     var UPD_KEY = 'cmupd_v1';
     var pendingUpdate = null;
 
@@ -5297,17 +5297,37 @@ window.__initApp = function() {
 };
 
 // اجرا بعد از لاگین کاربر
-FB.onUserChange(function(user) {
-    if (user && FB.userData) {
-        if (!window.__appStarted) {
-            window.__appStarted = true;
-            setTimeout(function() {
-                try { window.__initApp(); }
-                catch(e) { console.error('❌ خطا در راه‌اندازی اپ:', e); }
-            }, 100);
+// firebase-init.js یک ماژول است و بعد از این اسکریپت اجرا می‌شود؛ پس باید منتظر FB بمانیم
+(function waitForFB(tries) {
+    if (!window.FB) {
+        if (tries > 160) {   // حدود ۸ ثانیه
+            if (!document.getElementById('fbFail')) {
+                var d = document.createElement('div'); d.id = 'fbFail';
+                d.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#1e1b4b;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;font-family:Vazirmatn,Tahoma,sans-serif;line-height:2;';
+                d.innerHTML = '<div style="font-size:42px">📡</div><b style="font-size:18px">اتصال به سرویس ورود برقرار نشد</b><div style="font-size:13.5px;opacity:.85;max-width:340px">اینترنت (یا فیلترشکن) را بررسی کنید؛ برنامه برای ورود به سرویس Google/Firebase نیاز به اتصال دارد.</div><button id="fbRetry" style="background:#fff;color:#1e1b4b;border:0;border-radius:12px;padding:12px 28px;font-family:inherit;font-size:15px;font-weight:800;">🔄 تلاش دوباره</button>';
+                document.documentElement.classList.remove('cm-locked');
+                document.body.appendChild(d);
+                document.getElementById('fbRetry').onclick = function() { location.reload(); };
+            }
+            if (tries > 2400) return;
         }
+        return setTimeout(function() { waitForFB((tries || 0) + 1); }, 50);
     }
-});
+    var fail = document.getElementById('fbFail'); if (fail) fail.remove();
+    FB.onUserChange(function(user) {
+        // اگر بعد از شروع برنامه، کاربر دیگری وارد شد، صفحه دوباره بارگذاری شود تا داده‌ها قاطی نشوند
+        if (window.__appStarted && user && window.__startedUid && user.uid !== window.__startedUid) { location.reload(); return; }
+        if (user && FB.userData) {
+            if (!window.__appStarted) {
+                window.__appStarted = true; window.__startedUid = user.uid;
+                setTimeout(function() {
+                    try { window.__initApp(); }
+                    catch(e) { console.error('❌ خطا در راه‌اندازی اپ:', e); }
+                }, 100);
+            }
+        }
+    });
+})(0);
 </script>
 
 </body>
