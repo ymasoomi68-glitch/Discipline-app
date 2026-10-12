@@ -116,7 +116,7 @@
     <button class="btn o block" id="btnHistory">🕘 ارسال‌های قبلی</button>
     <button class="btn o block" id="btnLogoutT" style="display:none;color:#dc2626;border-color:#fca5a5;">🚪 خروج از حساب</button>
     <button class="btn o block" data-close="ovSettings">بستن</button>
-    <p style="text-align:center;margin-top:12px;">نسخهٔ ۱.۴.۰</p>
+    <p style="text-align:center;margin-top:12px;">نسخهٔ ۱.۴.۱</p>
 </div></div>
 
 <!-- ورود JSON -->
@@ -507,7 +507,10 @@
         if (n === 160) { document.documentElement.classList.remove('cm-locked'); var t = document.getElementById('toast'); if (t) { t.textContent = 'حالت آفلاین: ارسال به‌صورت متنی'; t.classList.add('on'); setTimeout(function() { t.classList.remove('on'); }, 4000); } }
         return setTimeout(function() { waitForFB((n || 0) + 1); }, 50);
     }
-    FB.onUserChange(function(u) { if (u && FB.userData && window.TCH && FB.userData.role === 'teacher') window.TCH.ready(u); });
+    function go(u) { if (u && FB.userData && window.TCH && FB.userData.role === 'teacher' && FB.userData.status === 'active') window.TCH.ready(u); }
+    // بعد از تأیید معاون یا پیوستن، وضعیت ورود عوض نمی‌شود ولی فایربیس رویداد fb-ready می‌فرستد
+    window.addEventListener('fb-ready', function() { go(FB.user); });
+    FB.onUserChange(go);
 })(0);
 </script>
 </body>

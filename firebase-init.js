@@ -36,6 +36,7 @@ let authReady = false;
 const readyCbs = [];
 const userChangeCbs = [];
 let pendingWatch = null;
+let loadFailed = false;
 
 /* ═══════════════ Store ═══════════════ */
 function storeProxy() {
@@ -63,6 +64,7 @@ function withTimeout(promise, ms) {
     return Promise.race([promise, new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, ms); })]);
 }
 async function loadUserData() {
+    loadFailed = false;
     if (!currentUser) { userData = null; schoolData = null; return; }
     try {
         const snap = await withTimeout(getDoc(userRef(currentUser.uid)), 7000);
@@ -80,12 +82,13 @@ async function loadUserData() {
         let c = null;
         try { c = JSON.parse(localStorage.getItem(cacheKey(currentUser.uid)) || 'null'); } catch(x) {}
         if (c && c.u) { userData = c.u; schoolData = c.s || null; }
-        else { userData = null; schoolData = null; }
+        else { userData = null; schoolData = null; loadFailed = true; }   // خطا ≠ کاربر تازه
     }
 }
 
 async function createSchool(schoolName, schoolCode, adminName) {
     if (!currentUser) throw new Error('ابتدا وارد شوید');
+    if (loadFailed) throw new Error('اطلاعات حساب شما بارگذاری نشد؛ اتصال را بررسی و دوباره تلاش کنید');
     schoolCode = String(schoolCode || '').trim().toLowerCase();
     if (!/^[a-z0-9\-]{3,30}$/.test(schoolCode)) throw new Error('کد مدرسه فقط حروف کوچک انگلیسی، عدد و خط تیره (۳ تا ۳۰ کاراکتر)');
     const sref = schoolRef(schoolCode);
@@ -116,6 +119,7 @@ async function createSchool(schoolName, schoolCode, adminName) {
 
 async function joinSchool(schoolCode, teacherName, className) {
     if (!currentUser) throw new Error('ابتدا وارد شوید');
+    if (loadFailed) throw new Error('اطلاعات حساب شما بارگذاری نشد؛ اتصال را بررسی و دوباره تلاش کنید');
     schoolCode = String(schoolCode || '').trim().toLowerCase();
     const ssnap = await getDoc(schoolRef(schoolCode));
     if (!ssnap.exists()) throw new Error('مدرسه‌ای با این کد پیدا نشد');
@@ -253,6 +257,8 @@ window.FB = {
     get userData() { return userData; },
     get school() { return schoolData; },
     get ready() { return authReady; },
+    get loadFailed() { return loadFailed; },
+    reload: async () => { await loadUserData(); },
     onReady: (cb) => { if (authReady) cb(); else readyCbs.push(cb); },
     onUserChange: (cb) => { userChangeCbs.push(cb); if (authReady) cb(currentUser, userData, schoolData); },
     signInGoogle, signOut: doSignOut,
@@ -374,6 +380,7 @@ window.FB = {
 
     function route() {
         if (!FB.user) { document.documentElement.classList.add('cm-locked'); paneWelcome(); return; }
+        if (FB.loadFailed) { document.documentElement.classList.add('cm-locked'); paneRetry(); return; }
         const ud = FB.userData;
         let pick = false; try { pick = sessionStorage.getItem('fb_pick_role') === '1'; } catch(e) {}
         if (pick && ud && ud.role && ud.schoolId) { document.documentElement.classList.add('cm-locked'); paneRole(ud.role); return; }
@@ -466,15 +473,15 @@ window.FB = {
         });
     }
 
-    function paneJoinSchool() {
+    function paneJoinSchool(prefCode, prefClass) {
         show(`
             <div class="fb-logo"><div class="fb-logo-ic">🔑</div><div><b>پیوستن به مدرسه</b><small>برای معلم</small></div></div>
             <p class="fb-sub">کد مدرسه را از معاون بگیر و وارد کن</p>
             <div class="fb-err" id="fbErr"></div>
             <div class="fb-card">
-                <div class="fb-field"><label>کد مدرسه *</label><input type="text" id="jCode" placeholder="مثلاً: beheshti-1404" style="direction:ltr; text-align:right; font-family:monospace;"></div>
+                <div class="fb-field"><label>کد مدرسه *</label><input type="text" id="jCode" value="${prefCode || ''}" placeholder="مثلاً: beheshti-1404" style="direction:ltr; text-align:right; font-family:monospace;"></div>
                 <div class="fb-field"><label>نام و نام خانوادگی شما *</label><input type="text" id="jName" placeholder="مثلاً: علی رضایی" value="${FB.user && FB.user.displayName || ''}"></div>
-                <div class="fb-field"><label>کلاس من</label><input type="text" id="jClass" placeholder="مثلاً: ۱۰۱"></div>
+                <div class="fb-field"><label>کلاس من</label><input type="text" id="jClass" value="${prefClass || ''}" placeholder="مثلاً: ۱۰۱"></div>
                 <div class="hint" style="font-size:11.5px; opacity:.7; line-height:1.8;">پس از تأیید معاون، می‌توانی غیبت‌ها را ثبت کنی.</div>
             </div>
             <button class="fb-main green" id="fbJoin">📨 ارسال درخواست</button>
@@ -518,14 +525,33 @@ window.FB = {
         });
     }
 
+    function paneRetry() {
+        show(`
+            <div class="fb-logo"><div class="fb-logo-ic">📡</div><div><b>اتصال برقرار نشد</b></div></div>
+            <h1 class="fb-h1">اطلاعات حساب شما بارگذاری نشد</h1>
+            <p class="fb-sub">اینترنت (یا فیلترشکن) را بررسی کنید و دوباره تلاش کنید.<br>تا آن موقع چیزی ساخته یا تغییر داده نمی‌شود.</p>
+            <div class="fb-err" id="fbErr"></div>
+            <button class="fb-main" id="fbRetry">🔄 تلاش دوباره</button>
+            <button class="fb-ghost" id="fbOut">خروج از حساب</button>
+        `);
+        document.getElementById('fbOut').addEventListener('click', () => FB.signOut());
+        document.getElementById('fbRetry').addEventListener('click', async () => {
+            const b = document.getElementById('fbRetry'); b.disabled = true; b.textContent = 'در حال تلاش…';
+            try { await FB.reload(); } catch(e) {}
+            route();
+        });
+    }
+
     function paneRejected() {
         show(`
             <div class="fb-logo"><div class="fb-logo-ic">❌</div><div><b>درخواست رد شد</b></div></div>
             <h1 class="fb-h1">درخواست شما تأیید نشد</h1>
             <p class="fb-sub">معاون مدرسه درخواست پیوستن شما را رد کرده است.<br>برای اطلاعات بیشتر با ایشان تماس بگیرید.</p>
+            <button class="fb-main green" id="fbAgain">🔁 ارسال درخواست دوباره</button>
             <button class="fb-ghost" id="fbOut">خروج از حساب</button>
         `);
         document.getElementById('fbOut').addEventListener('click', () => FB.signOut());
+        document.getElementById('fbAgain').addEventListener('click', () => paneJoinSchool(FB.userData && FB.userData.schoolId, FB.userData && FB.userData.requestedClass));
     }
 
     FB.onReady(route);

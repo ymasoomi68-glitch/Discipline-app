@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdminOf(sid) { return hasProfile() && me().role == 'admin' && me().schoolId == sid && me().status == 'active'; }
+    function isTeacherOf(sid) { return hasProfile() && me().role == 'teacher' && me().schoolId == sid && me().status == 'active'; }
+    function schoolAdminIsMe(sid) { return get(/databases/$(database)/documents/schools/$(sid)).data.adminUid == request.auth.uid; }
+
+    // پروفایل کاربران
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdminOf(resource.data.schoolId));
+      allow list: if signedIn() && isAdminOf(resource.data.schoolId);
+      allow create, update: if signedIn() && request.auth.uid == uid && (
+          (request.resource.data.role == 'teacher' && request.resource.data.status == 'pending')
+          || (request.resource.data.role == 'admin' && schoolAdminIsMe(request.resource.data.schoolId))
+      );
+      // معاون فقط وضعیت و کلاس‌های معلم‌های مدرسهٔ خودش را عوض می‌کند
+      allow update: if signedIn() && isAdminOf(resource.data.schoolId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'classId', 'approvedAt']);
+    }
+
+    // مدرسه
+    match /schools/{sid} {
+      allow get: if signedIn();                       // معلم با کد مدرسه آن را پیدا می‌کند
+      allow create: if signedIn() && request.resource.data.adminUid == request.auth.uid;
+      allow update: if isAdminOf(sid);
+
+      // لیست کلاس‌ها و دانش‌آموزان (منتشرشده توسط معاون)
+      match /meta/{docId} {
+        allow read: if isAdminOf(sid) || isTeacherOf(sid);
+        allow write: if isAdminOf(sid);
+      }
+
+      // گزارش‌های حضور و غیاب ارسالی معلم‌ها
+      match /reports/{rid} {
+        allow read: if isAdminOf(sid) || (signedIn() && resource.data.uid == request.auth.uid);
+        allow create: if isTeacherOf(sid) && request.resource.data.uid == request.auth.uid && request.resource.data.applied == false;
+        allow update: if (isTeacherOf(sid) && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid)
+          || (isAdminOf(sid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['applied']));
+      }
+    }
+  }
+}
