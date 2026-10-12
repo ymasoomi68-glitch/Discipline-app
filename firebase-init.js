@@ -4,7 +4,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
-    getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut
+    getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
     getFirestore, doc, getDoc, setDoc, updateDoc,
@@ -23,6 +23,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+// ورود روی دستگاه بماند (با رفرش یا بستن برنامه دوباره لاگین نخواهد شد)
+try { setPersistence(auth, browserLocalPersistence).catch(function() {}); } catch(e) {}
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
@@ -56,20 +58,29 @@ function storeProxy() {
 function userRef(uid) { return doc(db, 'users', uid); }
 function schoolRef(sid) { return doc(db, 'schools', sid); }
 
+function cacheKey(uid) { return 'fb_cache_' + uid; }
+function withTimeout(promise, ms) {
+    return Promise.race([promise, new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, ms); })]);
+}
 async function loadUserData() {
     if (!currentUser) { userData = null; schoolData = null; return; }
     try {
-        const snap = await getDoc(userRef(currentUser.uid));
+        const snap = await withTimeout(getDoc(userRef(currentUser.uid)), 7000);
         userData = snap.exists() ? { uid: currentUser.uid, ...snap.data() } : null;
         if (userData && userData.schoolId) {
-            const ssnap = await getDoc(schoolRef(userData.schoolId));
+            const ssnap = await withTimeout(getDoc(schoolRef(userData.schoolId)), 7000);
             schoolData = ssnap.exists() ? { id: userData.schoolId, ...ssnap.data() } : null;
         } else {
             schoolData = null;
         }
+        try { localStorage.setItem(cacheKey(currentUser.uid), JSON.stringify({ u: userData, s: schoolData })); } catch(e) {}
     } catch(e) {
         console.error('خطا در بارگذاری:', e);
-        userData = null; schoolData = null;
+        // شبکه/Firestore در دسترس نیست: از آخرین اطلاعات ذخیره‌شدهٔ همین کاربر استفاده کن
+        let c = null;
+        try { c = JSON.parse(localStorage.getItem(cacheKey(currentUser.uid)) || 'null'); } catch(x) {}
+        if (c && c.u) { userData = c.u; schoolData = c.s || null; }
+        else { userData = null; schoolData = null; }
     }
 }
 
@@ -126,6 +137,53 @@ async function joinSchool(schoolCode, teacherName, className) {
     return userData;
 }
 
+
+/* ═══════════════ حضور و غیاب آنلاین ═══════════════ */
+function needSchool() {
+    if (!currentUser || !userData || !userData.schoolId) throw new Error('ابتدا وارد مدرسه شوید');
+    return userData.schoolId;
+}
+// معاون: انتشار لیست کلاس‌ها/دانش‌آموزان برای معلم‌ها
+async function publishClasses(list) {
+    const sid = needSchool();
+    if (userData.role !== 'admin') throw new Error('دسترسی ندارید');
+    await setDoc(doc(db, 'schools', sid, 'meta', 'classes'), { classes: list, updatedAt: serverTimestamp() });
+}
+// معلم: دریافت کلاس‌های منتشرشده
+async function getClasses() {
+    const sid = needSchool();
+    const snap = await withTimeout(getDoc(doc(db, 'schools', sid, 'meta', 'classes')), 8000);
+    return snap.exists() ? (snap.data().classes || []) : [];
+}
+// معلم: ارسال گزارش حضور و غیاب (پیام کوتاه DB2)
+async function sendReport(msg, className, date, teacherName) {
+    const sid = needSchool();
+    if (userData.status !== 'active') throw new Error('هنوز توسط معاون تأیید نشده‌اید');
+    const id = String(className + '_' + date).replace(/[\/\s|#?\[\]]+/g, '-');
+    await withTimeout(setDoc(doc(db, 'schools', sid, 'reports', id), {
+        uid: currentUser.uid, teacher: teacherName || userData.name || '', c: className, d: date,
+        msg: msg, applied: false, createdAt: serverTimestamp()
+    }), 10000);
+}
+// معاون: گزارش‌های ثبت‌نشدهٔ آنلاین (لحظه‌ای)
+function watchReports(cb) {
+    if (!userData || !userData.schoolId) return () => {};
+    const q = query(collection(db, 'schools', userData.schoolId, 'reports'), where('applied', '==', false));
+    return onSnapshot(q, (snap) => {
+        const out = [];
+        snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+        cb(out);
+    }, (e) => console.error('watchReports:', e));
+}
+async function markReportsApplied(ids) {
+    const sid = needSchool();
+    await Promise.all(ids.map(id => updateDoc(doc(db, 'schools', sid, 'reports', id), { applied: true })));
+}
+async function setTeacherClasses(uid, classId) {
+    if (!userData || userData.role !== 'admin') throw new Error('دسترسی ندارید');
+    await updateDoc(userRef(uid), { classId: classId || '' });
+}
+
 function watchPending(onChange) {
     if (pendingWatch) pendingWatch();
     pendingWatch = onSnapshot(userRef(currentUser.uid), (snap) => {
@@ -177,6 +235,7 @@ function faErr(e) {
 
 async function doSignOut() {
     if (pendingWatch) { pendingWatch(); pendingWatch = null; }
+    try { sessionStorage.removeItem('fb_pick_role'); if (currentUser) localStorage.removeItem(cacheKey(currentUser.uid)); } catch(e) {}
     await signOut(auth);
     try { localStorage.removeItem('cm_active_page'); } catch(e) {}
 }
@@ -200,6 +259,7 @@ window.FB = {
     createSchool, joinSchool,
     approveTeacher, rejectTeacher,
     watchTeachers, watchPending,
+    publishClasses, getClasses, sendReport, watchReports, markReportsApplied, setTeacherClasses,
     store: storeProxy,
     _faErr: faErr
 };
@@ -306,14 +366,17 @@ window.FB = {
             const btn = document.getElementById('fbGoogle');
             btn.disabled = true;
             showErr('');
+            try { sessionStorage.setItem('fb_pick_role', '1'); } catch(x) {}
             try { await FB.signInGoogle(); }
-            catch(e) { btn.disabled = false; showErr(e.message || 'خطا در ورود'); }
+            catch(e) { try { sessionStorage.removeItem('fb_pick_role'); } catch(x) {} btn.disabled = false; showErr(e.message || 'خطا در ورود'); }
         });
     }
 
     function route() {
         if (!FB.user) { document.documentElement.classList.add('cm-locked'); paneWelcome(); return; }
         const ud = FB.userData;
+        let pick = false; try { pick = sessionStorage.getItem('fb_pick_role') === '1'; } catch(e) {}
+        if (pick && ud && ud.role && ud.schoolId) { document.documentElement.classList.add('cm-locked'); paneRole(ud.role); return; }
         if (!ud) { document.documentElement.classList.add('cm-locked'); paneRole(); return; }
         if (ud.role === 'admin') {
             if (!ud.schoolId) { document.documentElement.classList.add('cm-locked'); paneCreateSchool(); return; }
@@ -329,16 +392,24 @@ window.FB = {
     }
 
     function enterApp() {
+        // معاون → دفتر انضباطی ، معلم → صفحهٔ معلم
+        try {
+            const onTeacherPage = /teacher\.html/.test(location.pathname);
+            const role = FB.userData && FB.userData.role;
+            if (role === 'admin' && onTeacherPage) { location.replace('index.html'); return; }
+            if (role === 'teacher' && !onTeacherPage) { location.replace('teacher.html'); return; }
+        } catch(e) {}
+        try { sessionStorage.removeItem('fb_pick_role'); if (FB.user) localStorage.setItem(cacheKey(FB.user.uid), JSON.stringify({ u: FB.userData, s: FB.school })); } catch(e) {}
         document.documentElement.classList.remove('cm-locked');
         root.style.display = 'none';
         window.dispatchEvent(new CustomEvent('fb-ready', { detail: { user: FB.user, userData: FB.userData, school: FB.school } }));
         if (typeof window.onFBEnterApp === 'function') window.onFBEnterApp();
     }
 
-    function paneRole() {
+    function paneRole(savedRole) {
         show(`
             <div class="fb-logo"><div class="fb-logo-ic">👋</div><div><b>خوش آمدی</b><small>${FB.user && FB.user.email || ''}</small></div></div>
-            <p class="fb-sub">نقش خود را انتخاب کن</p>
+            <p class="fb-sub">${savedRole ? 'با چه نقشی وارد می‌شوید؟' : 'نقش خود را انتخاب کن'}</p>
             <div class="fb-err" id="fbErr"></div>
             <button class="fb-role admin" data-role="admin">
                 <span class="fb-role-ic">👨‍💼</span>
@@ -356,6 +427,11 @@ window.FB = {
         shell.querySelectorAll('[data-role]').forEach(b => {
             b.addEventListener('click', () => {
                 const role = b.getAttribute('data-role');
+                if (savedRole) {
+                    if (role === savedRole) { try { sessionStorage.removeItem('fb_pick_role'); } catch(e) {} route(); }
+                    else showErr('این حساب قبلاً به‌عنوان «' + (savedRole === 'admin' ? 'معاون' : 'معلم') + '» ثبت شده است. همان نقش را انتخاب کنید.');
+                    return;
+                }
                 if (role === 'admin') paneCreateSchool();
                 else paneJoinSchool();
             });
@@ -457,6 +533,6 @@ window.FB = {
         if (!user) { document.documentElement.classList.add('cm-locked'); paneWelcome(); }
         else route();
     });
-    if (FB.user) route();
-    else { document.documentElement.classList.add('cm-locked'); paneWelcome(); }
+    if (FB.ready) { if (FB.user) route(); else { document.documentElement.classList.add('cm-locked'); paneWelcome(); } }
+    else { document.documentElement.classList.add('cm-locked'); show('<div style="text-align:center;padding:60px 0;line-height:2.2;"><div style="font-size:46px">📒</div><b>دفتر انضباطی</b><br><span style="opacity:.75;font-size:13px">در حال بررسی ورود…</span></div>'); }
 })();

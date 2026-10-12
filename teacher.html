@@ -30,6 +30,8 @@
     }
 })();
 </script>
+<script>document.documentElement.classList.add('cm-locked');</script>
+<script type="module" src="firebase-init.js"></script>
 <style>
     :root { --g1:#059669; --g2:#10b981; --bg:#f1f5f4; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -88,6 +90,7 @@
 </style>
 </head>
 <body>
+<div id="authRoot" aria-live="polite"></div>
 <header class="top">
     <div><h1>📋 سامانه حضور و غیاب</h1><div class="sub" id="whoLbl">برنامهٔ معلم</div></div>
     <button class="icon-btn" id="btnSettings" aria-label="تنظیمات"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
@@ -107,11 +110,13 @@
     <input type="text" id="inTeacher" placeholder="مثلاً: خانم احمدی">
     <button class="btn block" id="btnSaveName">💾 ذخیره نام</button>
     <button class="btn block" id="btnInstall2" style="background:#4f46e5;">📱 نصب روی این دستگاه</button>
+    <button class="btn block" id="btnSyncOnline" style="display:none;background:#0284c7;">🔄 دریافت کلاس‌ها از معاون (آنلاین)</button>
     <button class="btn o block" id="btnImport">📥 ورود کلاس از فایل ارسالی معاون</button>
     <button class="btn o block" id="btnManage">👥 مدیریت کلاس‌ها و دانش‌آموزان</button>
     <button class="btn o block" id="btnHistory">🕘 ارسال‌های قبلی</button>
+    <button class="btn o block" id="btnLogoutT" style="display:none;color:#dc2626;border-color:#fca5a5;">🚪 خروج از حساب</button>
     <button class="btn o block" data-close="ovSettings">بستن</button>
-    <p style="text-align:center;margin-top:12px;">نسخهٔ ۱.۳.۱</p>
+    <p style="text-align:center;margin-top:12px;">نسخهٔ ۱.۴.۰</p>
 </div></div>
 
 <!-- ورود JSON -->
@@ -223,7 +228,7 @@
     /* ===== نمایش ===== */
     function render() {
         var c = curCls(), m = $('main'), ib = installBanner();
-        $('whoLbl').textContent = cfg.teacher ? cfg.teacher : 'برنامهٔ معلم';
+        $('whoLbl').textContent = (onlineOK() ? '🌐 ' : '') + (cfg.teacher ? cfg.teacher : 'برنامهٔ معلم');
         if (!c) {
             $('bar').style.display = 'none';
             m.innerHTML = ib + '<div class="card"><div class="empty"><div class="big">📚</div><b>هنوز کلاسی ندارید</b><br>فایل JSON سیدا را که معاون داده وارد کنید.</div>' +
@@ -308,6 +313,7 @@
         }
         pendingMsg = buildMessage(c, dm); pendingMeta = { c: c.className, d: curDate };
         $('sendMsg').textContent = pendingMsg;
+        if (onlineOK() && navigator.onLine !== false) { sendOnline(); return; }
         if (navigator.share) { doShare(); } else openOv('ovSend');
     };
     function markSent() { sent.push({ c: pendingMeta.c, d: pendingMeta.d, t: Date.now(), m: pendingMsg }); saveS(); render(); }
@@ -443,9 +449,66 @@
         else if (e.target.id === 'btnNoBanner') { bannerOff = true; try { S.setItem('nobanner', '1'); } catch(x) {} render(); }
     });
 
+    /* ===== آنلاین (Firebase) ===== */
+    function onlineOK() { return !!(window.FB && FB.user && FB.userData && FB.userData.role === 'teacher' && FB.userData.status === 'active' && FB.userData.schoolId); }
+    function sendOnline() {
+        toast('⏳ در حال ارسال به معاون…');
+        FB.sendReport(pendingMsg, pendingMeta.c, pendingMeta.d, cfg.teacher).then(function() {
+            markSent(); toast('✅ آنلاین برای معاون ارسال شد');
+        }).catch(function(e) {
+            console.error(e); toast('ارسال آنلاین نشد؛ از ارسال متنی استفاده کنید');
+            if (navigator.share) doShare(); else openOv('ovSend');
+        });
+    }
+    function stKey(s) { var c = digits(s.codemelli || '').replace(/\D/g, ''); return c || 'n:' + norm((s.family || '') + ' ' + (s.name || '')); }
+    function mergePublished(list) {
+        var assigned = String((FB.userData && FB.userData.classId) || '').split('|').map(norm).filter(Boolean), added = 0;
+        (list || []).forEach(function(p) {
+            if (assigned.length && assigned.indexOf(norm(p.className)) < 0) return;
+            var c = classes.filter(function(x) { return norm(x.className) === norm(p.className); })[0];
+            if (!c) { c = { id: genId(), className: norm(p.className), gradeName: norm(p.gradeName), students: [] }; classes.push(c); added++; }
+            var have = {}; c.students.forEach(function(s) { have[stKey(s)] = 1; });
+            (p.students || []).forEach(function(s) {
+                var k = stKey(s); if (have[k]) return; have[k] = 1;
+                c.students.push({ id: genId(), name: norm(s.name), family: norm(s.family), father: norm(s.father), codemelli: digits(s.codemelli || '').replace(/\D/g, '') });
+            });
+            sortSt(c);
+        });
+        saveC(); if (!cfg.cur && classes[0]) { cfg.cur = classes[0].id; saveCfg(); } render(); return added;
+    }
+    function syncOnline(silent) {
+        if (!onlineOK()) { if (!silent) toast('ابتدا وارد حساب معلم شوید'); return; }
+        FB.getClasses().then(function(l) { var n = mergePublished(l); if (!silent) toast(l && l.length ? '✅ کلاس‌ها به‌روز شد' : 'معاون هنوز کلاسی منتشر نکرده'); })
+            .catch(function() { if (!silent) toast('دریافت کلاس‌ها ناموفق بود'); });
+    }
+    $('btnSyncOnline').onclick = function() { closeOv('ovSettings'); syncOnline(false); };
+    $('btnLogoutT').onclick = function() {
+        if (!confirm('از حساب کاربری خارج می‌شوید؟')) return;
+        var done = function() { try { sessionStorage.clear(); } catch(x) {} location.reload(); };
+        try { Promise.resolve(window.FB && FB.signOut()).then(done, done); } catch(x) { done(); }
+    };
+    window.TCH = { ready: function(u) {
+        var last = S.getItem('uid');
+        if (last && last !== u.uid) { ['classes', 'att', 'sent', 'cfg'].forEach(function(k) { S.removeItem(k); }); S.setItem('uid', u.uid); location.reload(); return; }
+        S.setItem('uid', u.uid);
+        if (!cfg.teacher && FB.userData && FB.userData.name) { cfg.teacher = FB.userData.name; saveCfg(); }
+        var w = $('whoLbl'); if (w) w.textContent = (onlineOK() ? '🌐 ' : '') + (cfg.teacher || 'برنامهٔ معلم');
+        $('btnSyncOnline').style.display = onlineOK() ? '' : 'none'; $('btnLogoutT').style.display = '';
+        render(); syncOnline(true);
+    } };
+
     load(); render();
     if ('serviceWorker' in navigator) window.addEventListener('load', function() { navigator.serviceWorker.register('./sw.js').catch(function() {}); });
 })();
+</script>
+<script>
+(function waitForFB(n) {
+    if (!window.FB) {
+        if (n === 160) { document.documentElement.classList.remove('cm-locked'); var t = document.getElementById('toast'); if (t) { t.textContent = 'حالت آفلاین: ارسال به‌صورت متنی'; t.classList.add('on'); setTimeout(function() { t.classList.remove('on'); }, 4000); } }
+        return setTimeout(function() { waitForFB((n || 0) + 1); }, 50);
+    }
+    FB.onUserChange(function(u) { if (u && FB.userData && window.TCH && FB.userData.role === 'teacher') window.TCH.ready(u); });
+})(0);
 </script>
 </body>
 </html>

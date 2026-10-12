@@ -1352,6 +1352,7 @@
                 <button class="btn btn-primary" id="btnAddClass">➕ افزودن کلاس</button>
                 <button class="btn btn-success" id="btnAddFromSida">📥 افزودن از سیدا</button>
                 <button class="btn btn-outline" id="btnExportTeacher">📤 فایل کلاس برای معلم</button>
+                <button class="btn btn-primary" id="btnTeachers">👥 معلم‌ها (آنلاین)</button>
             </div>
 
             <div id="classesContainer">
@@ -1723,7 +1724,7 @@
             </div>
 
             <div style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:20px;padding:16px;border-top:1px dashed var(--border);">
-                📒 دفتر انضباطی - نسخهٔ <span id="appVersionLabel">۱.۳.۱</span><br>
+                📒 دفتر انضباطی - نسخهٔ <span id="appVersionLabel">۱.۴.۰</span><br>
                 🎨 طراح: یوسف معصومی
             </div>
         </div>
@@ -1834,6 +1835,7 @@
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;line-height:1.9;">
             پیام‌های معلم‌ها را از چت شاد/ایتا/بله کپی کنید و اینجا بچسبانید. می‌توانید همهٔ پیام‌های چت را یک‌جا انتخاب و کپی کنید؛ برنامه خودش گزارش‌ها را از میان متن پیدا می‌کند.
         </p>
+        <button class="btn btn-primary btn-sm" id="btnInboxOnline" style="margin-bottom:8px;display:none;">🌐 دریافت گزارش‌های آنلاین</button>
         <button class="btn btn-outline btn-sm" id="btnInboxPaste" style="margin-bottom:8px;">📋 چسباندن از کلیپ‌بورد</button>
         <textarea class="form-textarea" id="inboxText" style="min-height:110px;font-size:13px;" placeholder="پیام معلم را اینجا بچسبانید..."></textarea>
         <div id="inboxMsg" style="font-size:13px;margin:6px 0;"></div>
@@ -1842,6 +1844,26 @@
         <div class="modal-actions">
             <button class="btn btn-outline" data-close-modal="modalInbox">بستن</button>
             <button class="btn btn-success" id="btnInboxApply" disabled>✅ ثبت گزارش‌ها</button>
+        </div>
+    </div>
+</div>
+
+<!-- مودال معلم‌های مدرسه (آنلاین) -->
+<div class="modal-overlay" id="modalTeachers">
+    <div class="modal" style="max-width:680px;">
+        <h2 class="modal-title">👥 معلم‌های مدرسه</h2>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.9;margin-bottom:8px;">
+            کد مدرسه را به معلم‌ها بدهید تا با حساب Google وارد شوند و «معلم کلاس» را انتخاب کنند. درخواست آن‌ها اینجا می‌آید؛ کلاس‌هایشان را تعیین و تأیید کنید.
+        </p>
+        <div style="background:var(--bg,#f1f5f9);border-radius:12px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:13px;">کد مدرسه:</span>
+            <b id="teachersCode" style="direction:ltr;font-family:monospace;font-size:16px;"></b>
+            <button class="btn btn-outline btn-sm" id="btnCopyCode" style="margin-inline-start:auto;">📋 کپی</button>
+        </div>
+        <button class="btn btn-success btn-sm" id="btnPublishClasses" style="margin-bottom:8px;">📤 انتشار کلاس‌ها و دانش‌آموزان برای معلم‌ها</button>
+        <div id="teachersList" style="max-height:48vh;overflow:auto;"></div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" data-close-modal="modalTeachers">بستن</button>
         </div>
     </div>
 </div>
@@ -3439,7 +3461,7 @@ window.__initApp = function() {
         if (!el) return;
         if (!appData.classes.length) { el.textContent = 'پس از افزودن کلاس‌ها فعال می‌شود'; return; }
         var st = inboxStatusFor(getTodayJalaliStr()), done = st.filter(function(x) { return x.done; }).length;
-        el.textContent = 'امروز: ' + toPersianNum(done) + ' از ' + toPersianNum(st.length) + ' کلاس ثبت شده';
+        el.textContent = 'امروز: ' + toPersianNum(done) + ' از ' + toPersianNum(st.length) + ' کلاس ثبت شده' + ((onlineReports || []).length ? ' — 🌐 ' + toPersianNum(onlineReports.length) + ' گزارش آنلاین جدید' : '');
     }
 
     function renderInboxStatus() {
@@ -3512,6 +3534,115 @@ window.__initApp = function() {
         renderInboxReports();
     }
 
+
+    /* ═══════════════════════════════════════════════════
+       🌐 حضور و غیاب آنلاین (معلم → معاون) و مدیریت معلم‌ها
+       ═══════════════════════════════════════════════════ */
+    var onlineReports = [], onlineStop = null, teachersStop = null, teachersData = [], teacherSel = {};
+    function isAdminOnline() { return !!(window.FB && FB.user && FB.userData && FB.userData.role === 'admin' && FB.userData.schoolId); }
+    function onlineBadge() {
+        var n = (onlineReports || []).length, b = document.getElementById('btnInboxOnline');
+        if (b) { b.style.display = isAdminOnline() ? '' : 'none'; b.disabled = n === 0; b.textContent = n ? '🌐 دریافت ' + toPersianNum(n) + ' گزارش آنلاین' : '🌐 گزارش آنلاین جدیدی نیست'; }
+        try { updateInboxStatus(); } catch(e) {}
+    }
+    function startOnline() {
+        if (!isAdminOnline() || onlineStop) return;
+        onlineStop = FB.watchReports(function(list) { onlineReports = list || []; onlineBadge(); });
+        onlineBadge();
+    }
+    startOnline();
+    (function() { var b = document.getElementById('btnInboxOnline'); if (!b) return;
+        b.addEventListener('click', function() {
+            if (!onlineReports.length) return;
+            document.getElementById('inboxText').value = onlineReports.map(function(r) { return r.msg; }).join('\n');
+            inboxCheck();
+        });
+    })();
+    function markOnlineApplied(keys) {
+        var ids = onlineReports.filter(function(o) { return keys[inNorm(o.c) + '|' + o.d]; }).map(function(o) { return o.id; });
+        if (ids.length && isAdminOnline()) FB.markReportsApplied(ids).catch(function(e) { console.error(e); });
+    }
+
+    function publishClassesNow(silent) {
+        if (!isAdminOnline()) return Promise.resolve();
+        var list = appData.classes.map(function(c) {
+            return { className: c.className, gradeName: c.gradeName || '', students: (c.students || []).map(function(s) { return { name: s.name || '', family: s.family || '', father: s.father || '', codemelli: s.codemelli || '' }; }) };
+        });
+        return FB.publishClasses(list).then(function() { if (!silent) alert('✅ کلاس‌ها برای معلم‌ها منتشر شد.'); })
+            .catch(function(e) { console.error(e); if (!silent) alert('❌ انتشار انجام نشد: ' + (e && e.message || '')); });
+    }
+    function looseCls(t) { return inDigits(inNorm(t)).replace(/کلاس|\s/g, ''); }
+    function teacherClassSet(t) {
+        if (teacherSel[t.uid]) return teacherSel[t.uid];
+        var sel = {};
+        String(t.classId || '').split('|').forEach(function(x) { if (x) sel[inNorm(x)] = true; });
+        if (!Object.keys(sel).length && t.requestedClass) {
+            appData.classes.forEach(function(c) { if (looseCls(c.className) === looseCls(t.requestedClass)) sel[inNorm(c.className)] = true; });
+        }
+        return (teacherSel[t.uid] = sel);
+    }
+    function renderTeachers() {
+        var box = document.getElementById('teachersList'); if (!box) return;
+        if (!teachersData.length) { box.innerHTML = '<div class="empty-state-hint" style="padding:16px;text-align:center;">هنوز معلمی درخواست نداده است.</div>'; return; }
+        var ST = { pending: ['⏳ در انتظار تأیید', '#92400e'], active: ['✅ فعال', '#047857'], rejected: ['⛔ رد/لغو شده', '#b91c1c'] };
+        box.innerHTML = teachersData.map(function(t) {
+            var st = ST[t.status] || ST.pending, sel = teacherClassSet(t);
+            var chips = appData.classes.map(function(c) {
+                var nm = inNorm(c.className);
+                return '<label style="display:inline-flex;align-items:center;gap:4px;margin:3px 4px;font-size:13px;"><input type="checkbox" class="tch-cls" data-uid="' + escapeHtml(t.uid) + '" data-cn="' + escapeHtml(nm) + '"' + (sel[nm] ? ' checked' : '') + '> ' + escapeHtml(classLabel(c.className)) + '</label>';
+            }).join('');
+            var acts = t.status === 'active'
+                ? '<button class="btn btn-primary btn-sm" data-act="save" data-uid="' + escapeHtml(t.uid) + '">💾 ذخیرهٔ کلاس‌ها</button> <button class="btn btn-outline btn-sm" style="color:#dc2626;" data-act="reject" data-uid="' + escapeHtml(t.uid) + '">⛔ لغو دسترسی</button>'
+                : '<button class="btn btn-success btn-sm" data-act="approve" data-uid="' + escapeHtml(t.uid) + '">✅ تأیید</button>' + (t.status === 'pending' ? ' <button class="btn btn-outline btn-sm" style="color:#dc2626;" data-act="reject" data-uid="' + escapeHtml(t.uid) + '">❌ رد</button>' : '');
+            return '<div class="sida-row" style="display:block;cursor:default;margin-bottom:8px;">' +
+                '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><b>' + escapeHtml(t.name || '—') + '</b><span style="font-size:12px;color:' + st[1] + ';font-weight:700;">' + st[0] + '</span></div>' +
+                '<div style="font-size:12px;color:var(--text-muted);direction:ltr;text-align:right;">' + escapeHtml(t.email || '') + '</div>' +
+                (t.requestedClass ? '<div style="font-size:12.5px;margin-top:2px;">کلاس درخواستی: <b>' + escapeHtml(t.requestedClass) + '</b></div>' : '') +
+                '<div style="margin:6px 0;">' + (chips || '<small>ابتدا کلاس بسازید</small>') + '</div><div>' + acts + '</div></div>';
+        }).join('');
+    }
+    function selJoin(uid) { return Object.keys(teacherSel[uid] || {}).filter(function(k) { return teacherSel[uid][k]; }).join('|'); }
+    var btnTchs = document.getElementById('btnTeachers');
+    if (btnTchs) btnTchs.addEventListener('click', function() {
+        if (!isAdminOnline()) { alert('این بخش برای معاونی است که با حساب Google وارد شده و نقش «معاون» دارد.'); return; }
+        document.getElementById('teachersCode').textContent = FB.userData.schoolId;
+        document.getElementById('modalTeachers').classList.add('open');
+        if (!teachersStop) teachersStop = FB.watchTeachers(function(list) {
+            teachersData = (list || []).filter(function(u) { return u.uid !== FB.user.uid && u.role === 'teacher'; }); renderTeachers();
+        });
+        renderTeachers();
+        publishClassesNow(true);
+    });
+    var btnPub = document.getElementById('btnPublishClasses');
+    if (btnPub) btnPub.addEventListener('click', function() { publishClassesNow(false); });
+    var btnCode = document.getElementById('btnCopyCode');
+    if (btnCode) btnCode.addEventListener('click', function() {
+        var c = FB.userData.schoolId;
+        if (navigator.clipboard) navigator.clipboard.writeText(c).then(function() { alert('کد مدرسه کپی شد: ' + c); }, function() { alert('کد مدرسه: ' + c); }); else alert('کد مدرسه: ' + c);
+    });
+    var tl = document.getElementById('teachersList');
+    if (tl) {
+        tl.addEventListener('change', function(e) {
+            var t = e.target; if (!t.classList || !t.classList.contains('tch-cls')) return;
+            var uid = t.getAttribute('data-uid'); (teacherSel[uid] = teacherSel[uid] || {})[t.getAttribute('data-cn')] = t.checked;
+        });
+        tl.addEventListener('click', function(e) {
+            var b = e.target.closest ? e.target.closest('[data-act]') : null; if (!b) return;
+            var uid = b.getAttribute('data-uid'), act = b.getAttribute('data-act'); b.disabled = true;
+            var done = function(msg) { b.disabled = false; if (msg) alert(msg); };
+            if (act === 'approve') {
+                var cl = selJoin(uid);
+                if (!cl && !confirm('هیچ کلاسی انتخاب نشده؛ معلم همهٔ کلاس‌ها را می‌بیند. ادامه می‌دهید؟')) { done(); return; }
+                FB.approveTeacher(uid, cl).then(function() { return publishClassesNow(true); }).then(function() { done('✅ معلم تأیید شد.'); }, function(er) { done('❌ ' + (er && er.message || 'خطا')); });
+            } else if (act === 'save') {
+                FB.setTeacherClasses(uid, selJoin(uid)).then(function() { done('✅ ذخیره شد.'); }, function(er) { done('❌ ' + (er && er.message || 'خطا')); });
+            } else if (act === 'reject') {
+                if (!confirm('دسترسی این معلم لغو شود؟')) { done(); return; }
+                FB.rejectTeacher(uid).then(function() { done(); }, function(er) { done('❌ ' + (er && er.message || 'خطا')); });
+            }
+        });
+    }
+
     function openInbox() {
         inboxReports = [];
         document.getElementById('inboxText').value = '';
@@ -3541,7 +3672,7 @@ window.__initApp = function() {
         } else updateInboxBtn();
     });
     document.getElementById('btnInboxApply').addEventListener('click', function() {
-        var applied = 0, skipped = 0;
+        var applied = 0, skipped = 0, appliedKeys = {};
         document.querySelectorAll('.inb-chk:checked').forEach(function(ch) {
             var r = inboxReports[parseInt(ch.getAttribute('data-i'), 10)];
             var cls = r.target >= 0 ? appData.classes[r.target] : null;
@@ -3549,8 +3680,9 @@ window.__initApp = function() {
             var res = inboxResolve(r, cls);
             skipped += res.unmatched;
             attendanceData[getAttKey(cls.className, r.d)] = res.day;
-            applied++;
+            applied++; appliedKeys[inNorm(r.c) + '|' + r.d] = true;
         });
+        markOnlineApplied(appliedKeys);
         saveAttendance();
         document.getElementById('modalInbox').classList.remove('open');
         try { if (currentPageName === 'attendance') renderAttendance(); } catch(e) {}
@@ -4998,7 +5130,7 @@ window.__initApp = function() {
     /* ═══════════════════════════════════════════════════
        🔄 به‌روزرسانی از GitHub
        ═══════════════════════════════════════════════════ */
-    var APP_VERSION = '1.3.1';
+    var APP_VERSION = '1.4.0';
     var UPD_KEY = 'cmupd_v1';
     var pendingUpdate = null;
 
@@ -5297,6 +5429,16 @@ window.__initApp = function() {
 };
 
 // اجرا بعد از لاگین کاربر
+// خروج از حساب (دکمهٔ بالای صفحه و دکمهٔ تنظیمات)
+document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest ? e.target.closest('#topUserBtn, #btnAccLogout') : null;
+    if (!t) return;
+    e.preventDefault();
+    if (!confirm('از حساب کاربری خارج می‌شوید؟')) return;
+    var done = function() { try { sessionStorage.clear(); } catch(x) {} location.reload(); };
+    try { Promise.resolve(window.FB && FB.signOut()).then(done, done); } catch(x) { done(); }
+});
+
 // firebase-init.js یک ماژول است و بعد از این اسکریپت اجرا می‌شود؛ پس باید منتظر FB بمانیم
 (function waitForFB(tries) {
     if (!window.FB) {
@@ -5314,18 +5456,20 @@ window.__initApp = function() {
         return setTimeout(function() { waitForFB((tries || 0) + 1); }, 50);
     }
     var fail = document.getElementById('fbFail'); if (fail) fail.remove();
+    function startApp(user) {
+        if (!user || !FB.userData || window.__appStarted) return;
+        window.__appStarted = true; window.__startedUid = user.uid;
+        setTimeout(function() {
+            try { window.__initApp(); }
+            catch(e) { console.error('❌ خطا در راه‌اندازی اپ:', e); }
+        }, 100);
+    }
+    // وقتی کاربر تازه مدرسه ساخت / تأیید شد (بدون تغییر وضعیت ورود)، فایربیس این رویداد را می‌فرستد
+    window.addEventListener('fb-ready', function() { startApp(FB.user); });
     FB.onUserChange(function(user) {
         // اگر بعد از شروع برنامه، کاربر دیگری وارد شد، صفحه دوباره بارگذاری شود تا داده‌ها قاطی نشوند
         if (window.__appStarted && user && window.__startedUid && user.uid !== window.__startedUid) { location.reload(); return; }
-        if (user && FB.userData) {
-            if (!window.__appStarted) {
-                window.__appStarted = true; window.__startedUid = user.uid;
-                setTimeout(function() {
-                    try { window.__initApp(); }
-                    catch(e) { console.error('❌ خطا در راه‌اندازی اپ:', e); }
-                }, 100);
-            }
-        }
+        startApp(user);
     });
 })(0);
 </script>
